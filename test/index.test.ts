@@ -5,7 +5,7 @@ import worker from '../src/index';
 const env = { SLACK_SIGNING_SECRET: 'test-signing-secret' };
 
 function slackRequest(text: string): Request {
-  const body = new URLSearchParams({ command: '/status', text }).toString();
+  const body = new URLSearchParams({ command: '/ss', text }).toString();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = `v0=${createHmac('sha256', env.SLACK_SIGNING_SECRET)
     .update(`v0:${timestamp}:${body}`)
@@ -74,9 +74,21 @@ describe('worker fetch', () => {
     expect(texts).toContain('Claude status');
   });
 
-  it('explains usage when no source matches', async () => {
+  it('answers help privately even when --public is passed', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const response = await worker.fetch(slackRequest('help --public'), env);
+    const payload = (await response.json()) as SlackPayload;
+    expect(payload.response_type).toBe('ephemeral');
+    expect(payload.text).toContain('`/ss help`');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('names the unknown source and shows the help', async () => {
     const response = await worker.fetch(slackRequest('jira'), env);
     const payload = (await response.json()) as SlackPayload;
-    expect(payload.text).toContain('Uso:');
+    expect(payload.response_type).toBe('ephemeral');
+    expect(payload.text).toContain('No conozco `jira`');
+    expect(payload.text).toContain('`/ss help`');
   });
 });

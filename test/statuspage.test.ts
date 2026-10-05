@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBlocks, resolveSources, SOURCES, type StatuspageSummary } from '../src/statuspage';
+import { buildBlocks, buildHelpText, resolveSources, SOURCES, type StatuspageSummary } from '../src/statuspage';
 
 const summary: StatuspageSummary = {
   page: { name: 'GitHub', url: 'https://www.githubstatus.com', updated_at: '2026-10-05T19:50:50.000Z' },
@@ -32,8 +32,25 @@ describe('resolveSources', () => {
     expect(resolveSources('claude github')).toEqual([SOURCES.claude, SOURCES.github]);
   });
 
+  it('accepts short aliases and never repeats a source', () => {
+    expect(resolveSources('g')).toEqual([SOURCES.github]);
+    expect(resolveSources('C')).toEqual([SOURCES.claude]);
+    expect(resolveSources('g claude github')).toEqual([SOURCES.github, SOURCES.claude]);
+  });
+
   it('returns an empty list when nothing matches', () => {
     expect(resolveSources('jira')).toEqual([]);
+  });
+});
+
+describe('buildHelpText', () => {
+  it('lists every source with its aliases plus the help and public options', () => {
+    const help = buildHelpText();
+    expect(help).toContain('`/ss` · GitHub y Claude');
+    expect(help).toContain('`/ss g` o `/ss github` · Solo GitHub');
+    expect(help).toContain('`/ss c` o `/ss claude` · Solo Claude');
+    expect(help).toContain('`/ss help`');
+    expect(help).toContain('`--public`');
   });
 });
 

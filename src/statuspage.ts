@@ -20,18 +20,23 @@ export interface StatuspageSummary {
 
 export interface StatusSource {
   key: string;
+  aliases: string[];
   label: string;
   summaryUrl: string;
 }
 
+const COMMAND = '/ss';
+
 export const SOURCES: Record<string, StatusSource> = {
   github: {
     key: 'github',
+    aliases: ['g'],
     label: 'GitHub',
     summaryUrl: 'https://www.githubstatus.com/api/v2/summary.json',
   },
   claude: {
     key: 'claude',
+    aliases: ['c'],
     label: 'Claude',
     summaryUrl: 'https://status.claude.com/api/v2/summary.json',
   },
@@ -52,17 +57,40 @@ const COMPONENT_EMOJI: Record<ComponentStatus, string> = {
   under_maintenance: ':wrench:',
 };
 
+function findSource(word: string): StatusSource | undefined {
+  return Object.values(SOURCES).find((source) => source.key === word || source.aliases.includes(word));
+}
+
 /**
- * Resolves the slash-command text into the list of sources to query.
- * Empty text or "all" returns every known source.
+ * Resolves the slash-command text into the list of sources to query, matching keys or aliases.
+ * Empty text or "all" returns every known source; repeated sources appear once.
  */
 export function resolveSources(text: string): StatusSource[] {
   const wanted = text.trim().toLowerCase();
   if (wanted === '' || wanted === 'all') return Object.values(SOURCES);
-  return wanted
+  const matches = wanted
     .split(/\s+/)
-    .map((key) => SOURCES[key])
+    .map(findSource)
     .filter((source): source is StatusSource => Boolean(source));
+  return [...new Set(matches)];
+}
+
+/**
+ * Builds the mrkdwn help message listing every command form derived from SOURCES.
+ */
+export function buildHelpText(): string {
+  const sources = Object.values(SOURCES);
+  const sourceLines = sources.map((source) => {
+    const forms = [...source.aliases, source.key].map((word) => `\`${COMMAND} ${word}\``).join(' o ');
+    return `${forms} · Solo ${source.label}`;
+  });
+  return [
+    `*Comandos de ${COMMAND}*`,
+    `\`${COMMAND}\` · ${sources.map((source) => source.label).join(' y ')}`,
+    ...sourceLines,
+    `\`${COMMAND} help\` · Esta ayuda`,
+    `Agrega \`--public\` para publicar la respuesta en el canal, ej. \`${COMMAND} g --public\``,
+  ].join('\n');
 }
 
 /**

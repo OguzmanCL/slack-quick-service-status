@@ -1,4 +1,4 @@
-import { buildBlocks, fetchSummary, resolveSources, SOURCES } from './statuspage';
+import { buildBlocks, buildHelpText, fetchSummary, resolveSources } from './statuspage';
 import { verifySlackRequest } from './slack';
 
 interface Env {
@@ -12,7 +12,7 @@ function slackJson(payload: unknown): Response {
 }
 
 /**
- * Handles the /status slash command and replies with Block Kit blocks.
+ * Handles the /ss slash command and replies with Block Kit blocks.
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -30,12 +30,17 @@ export default {
     const form = new URLSearchParams(rawBody);
     const text = form.get('text') ?? '';
     const inChannel = text.includes('--public');
-    const sources = resolveSources(text.replace('--public', ''));
+    const query = text.replace('--public', '').trim();
 
+    if (query.toLowerCase() === 'help') {
+      return slackJson({ response_type: 'ephemeral', text: buildHelpText() });
+    }
+
+    const sources = resolveSources(query);
     if (sources.length === 0) {
       return slackJson({
         response_type: 'ephemeral',
-        text: `Uso: \`/status [${Object.keys(SOURCES).join('|')}|all] [--public]\``,
+        text: `No conozco \`${query}\`.\n\n${buildHelpText()}`,
       });
     }
 
