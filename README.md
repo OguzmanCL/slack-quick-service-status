@@ -53,7 +53,7 @@ secret and run `pnpm dev`.
 
 1. `pnpm wrangler login`
 2. `pnpm wrangler secret put SLACK_SIGNING_SECRET`
-3. `pnpm deploy` and note the `*.workers.dev` URL.
+3. `pnpm run deploy` and note the `*.workers.dev` URL.
 
 ## Slack app setup
 
