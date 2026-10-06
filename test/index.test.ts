@@ -4,8 +4,8 @@ import worker from '../src/index';
 
 const env = { SLACK_SIGNING_SECRET: 'test-signing-secret' };
 
-function slackRequest(text: string): Request {
-  const body = new URLSearchParams({ command: '/ss', text }).toString();
+function signedRequest(params: Record<string, string>): Request {
+  const body = new URLSearchParams(params).toString();
   const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = `v0=${createHmac('sha256', env.SLACK_SIGNING_SECRET)
     .update(`v0:${timestamp}:${body}`)
@@ -19,6 +19,10 @@ function slackRequest(text: string): Request {
     },
     body,
   });
+}
+
+function slackRequest(text: string): Request {
+  return signedRequest({ command: '/ss', text });
 }
 
 interface SlackPayload {
@@ -50,7 +54,8 @@ describe('worker fetch', () => {
     const response = await worker.fetch(slackRequest('github'), env);
     const payload = (await response.json()) as SlackPayload;
     expect(payload.response_type).toBe('ephemeral');
-    expect(payload.blocks[0]?.text?.text).toBe('GitHub status');
+    expect(payload.blocks[0]?.text?.text).toContain('Service Status');
+    expect(JSON.stringify(payload.blocks)).toContain('*GitHub*');
   });
 
   it('posts in channel when --public is passed', async () => {
@@ -69,9 +74,18 @@ describe('worker fetch', () => {
     );
     const response = await worker.fetch(slackRequest('all'), env);
     const payload = (await response.json()) as SlackPayload;
-    const texts = payload.blocks.map((block) => block.text?.text ?? '');
-    expect(texts.some((text) => text.includes('No pude consultar *GitHub*'))).toBe(true);
-    expect(texts).toContain('Claude status');
+    const rendered = JSON.stringify(payload.blocks);
+    expect(rendered).toContain('No pude consultar *GitHub*');
+    expect(rendered).toContain('*Claude*');
+  });
+
+  it('acknowledges button clicks without querying any status page', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const response = await worker.fetch(signedRequest({ payload: JSON.stringify({ type: 'block_actions' }) }), env);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('answers help privately even when --public is passed', async () => {

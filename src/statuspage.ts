@@ -22,39 +22,27 @@ export interface StatusSource {
   key: string;
   aliases: string[];
   label: string;
+  logoUrl: string;
   summaryUrl: string;
 }
 
-const COMMAND = '/ss';
+export const COMMAND = '/ss';
 
 export const SOURCES: Record<string, StatusSource> = {
   github: {
     key: 'github',
     aliases: ['g'],
     label: 'GitHub',
+    logoUrl: 'https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png',
     summaryUrl: 'https://www.githubstatus.com/api/v2/summary.json',
   },
   claude: {
     key: 'claude',
     aliases: ['c'],
     label: 'Claude',
+    logoUrl: 'https://claude.ai/images/claude_app_icon.png',
     summaryUrl: 'https://status.claude.com/api/v2/summary.json',
   },
-};
-
-const INDICATOR_EMOJI: Record<string, string> = {
-  none: ':large_green_circle:',
-  minor: ':large_yellow_circle:',
-  major: ':large_orange_circle:',
-  critical: ':red_circle:',
-};
-
-const COMPONENT_EMOJI: Record<ComponentStatus, string> = {
-  operational: ':large_green_circle:',
-  degraded_performance: ':large_yellow_circle:',
-  partial_outage: ':large_orange_circle:',
-  major_outage: ':red_circle:',
-  under_maintenance: ':wrench:',
 };
 
 function findSource(word: string): StatusSource | undefined {
@@ -104,66 +92,4 @@ export async function fetchSummary(source: StatusSource): Promise<StatuspageSumm
     throw new Error(`${source.label} status API responded ${response.status}`);
   }
   return response.json();
-}
-
-function humanize(value: string): string {
-  return value.replace(/_/g, ' ');
-}
-
-function truncate(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
-}
-
-/**
- * Builds the Slack Block Kit blocks that describe one source's summary.
- */
-export function buildBlocks(source: StatusSource, summary: StatuspageSummary): unknown[] {
-  const overallEmoji = INDICATOR_EMOJI[summary.status.indicator] ?? ':white_circle:';
-  const components = summary.components.filter(
-    (component) => !component.group && !component.name.startsWith('Visit '),
-  );
-  const componentLines = components
-    .map((component) => {
-      const emoji = COMPONENT_EMOJI[component.status] ?? ':white_circle:';
-      const suffix =
-        component.status === 'operational' ? '' : ` _(${humanize(component.status)})_`;
-      return `${emoji} ${component.name}${suffix}`;
-    })
-    .join('\n');
-
-  const blocks: unknown[] = [
-    { type: 'header', text: { type: 'plain_text', text: `${source.label} status` } },
-    {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `${overallEmoji} *${summary.status.description}*\n<${summary.page.url}|Ver página de status>`,
-      },
-    },
-    { type: 'section', text: { type: 'mrkdwn', text: componentLines } },
-  ];
-
-  for (const incident of summary.incidents) {
-    const latest = incident.incident_updates[0];
-    const detail = latest ? `\n> ${truncate(latest.body, 280)}` : '';
-    blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `:rotating_light: *<${incident.shortlink}|${incident.name}>*\nImpacto: *${incident.impact}* · Estado: *${humanize(incident.status)}*${detail}`,
-      },
-    });
-  }
-
-  blocks.push({
-    type: 'context',
-    elements: [
-      {
-        type: 'mrkdwn',
-        text: `Actualizado ${new Date(summary.page.updated_at).toUTCString()}`,
-      },
-    ],
-  });
-  blocks.push({ type: 'divider' });
-  return blocks;
 }

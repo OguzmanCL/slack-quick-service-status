@@ -1,5 +1,6 @@
-import { buildBlocks, buildHelpText, fetchSummary, resolveSources } from './statuspage';
-import { verifySlackRequest } from './slack';
+import { buildMessageBlocks, type ServiceResult } from './blocks.ts';
+import { buildHelpText, fetchSummary, resolveSources } from './statuspage.ts';
+import { verifySlackRequest } from './slack.ts';
 
 interface Env {
   SLACK_SIGNING_SECRET: string;
@@ -12,7 +13,8 @@ function slackJson(payload: unknown): Response {
 }
 
 /**
- * Handles the /ss slash command and replies with Block Kit blocks.
+ * Handles the /ss slash command and replies with Block Kit blocks. Signed interaction payloads
+ * from link buttons are acknowledged with an empty 200.
  */
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -28,6 +30,8 @@ export default {
     if (!valid) return new Response('Invalid signature', { status: 401 });
 
     const form = new URLSearchParams(rawBody);
+    if (form.has('payload')) return new Response(null, { status: 200 });
+
     const text = form.get('text') ?? '';
     const inChannel = text.includes('--public');
     const query = text.replace('--public', '').trim();
@@ -44,22 +48,18 @@ export default {
       });
     }
 
-    const results = await Promise.allSettled(sources.map((source) => fetchSummary(source)));
-    const blocks = results.flatMap((result, index) => {
+    const settled = await Promise.allSettled(sources.map((source) => fetchSummary(source)));
+    const results: ServiceResult[] = settled.map((result, index) => {
       const source = sources[index];
-      if (result.status === 'fulfilled') return buildBlocks(source, result.value);
-      return [
-        {
-          type: 'section',
-          text: { type: 'mrkdwn', text: `:warning: No pude consultar *${source.label}*: ${result.reason}` },
-        },
-      ];
+      if (result.status === 'fulfilled') return { source, summary: result.value };
+      const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      return { source, error: reason };
     });
 
     return slackJson({
       response_type: inChannel ? 'in_channel' : 'ephemeral',
       text: `Status de ${sources.map((source) => source.label).join(' y ')}`,
-      blocks,
+      blocks: buildMessageBlocks(results, new Date()),
     });
   },
 };
