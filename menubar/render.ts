@@ -27,22 +27,36 @@ const COMPONENT_DOT: Record<ComponentStatus, string> = {
   major_outage: '🔴',
 };
 
+const ICON_COLOR: Record<Indicator | 'unknown', string> = {
+  none: '#30a64a',
+  minor: '#e5b300',
+  major: '#ef7d00',
+  critical: '#e5383b',
+  unknown: '#8e8e93',
+};
+const ICON_SIZE = 18;
+const ICON_GAP = 6;
+const ICON_VIEWBOX = 24;
+
 const severity = (indicator: Indicator) => SEVERITY_ORDER.indexOf(indicator);
 
 function menuText(value: string): string {
   return value.replace(/\|/g, '/');
 }
 
-function title(results: ServiceResult[]): string {
-  const affected = results.flatMap((result) =>
-    'summary' in result && effectiveIndicator(result.summary) !== 'none'
-      ? [{ label: result.source.label, indicator: effectiveIndicator(result.summary) }]
-      : [],
-  );
-  if (affected.length === 0) return results.some((result) => 'error' in result) ? '⚪' : '🟢';
-  const worst = Math.max(...affected.map((item) => severity(item.indicator)));
-  const color = worst >= severity('major') ? '🔴' : '🟡';
-  return `${color} ${affected.map((item) => item.label).join(' · ')}`;
+/**
+ * Draws the menu bar icon as an SVG with one logo per service, colored by its effective state and
+ * gray when its status page could not be fetched.
+ */
+export function buildTitleIcon(results: ServiceResult[]): string {
+  const width = results.length * ICON_SIZE + (results.length - 1) * ICON_GAP;
+  const scale = ICON_SIZE / ICON_VIEWBOX;
+  const logos = results.map((result, index) => {
+    const color = ICON_COLOR['summary' in result ? effectiveIndicator(result.summary) : 'unknown'];
+    const x = index * (ICON_SIZE + ICON_GAP);
+    return `<path transform="translate(${x} 0) scale(${scale})" fill="${color}" d="${result.source.iconPath}"/>`;
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${ICON_SIZE}" viewBox="0 0 ${width} ${ICON_SIZE}">${logos.join('')}</svg>`;
 }
 
 function serviceRows(result: ServiceResult): string[] {
@@ -73,14 +87,12 @@ function clock(options: MenuOptions): string {
 }
 
 /**
- * Builds the SwiftBar output: a title colored by the worst effective state (yellow for minor,
- * red for major or critical, gray when a source failed and nothing else is wrong), one row per
- * service with a dot per component that opens its status page, and a submenu with every
- * component and active incident.
+ * Builds the SwiftBar output: the logo icon as title, one row per service with a dot per
+ * component that opens its status page, and a submenu with every component and active incident.
  */
 export function buildMenu(results: ServiceResult[], options: MenuOptions): string {
   return [
-    title(results),
+    ` | image=${Buffer.from(buildTitleIcon(results)).toString('base64')}`,
     '---',
     ...results.flatMap(serviceRows),
     '---',

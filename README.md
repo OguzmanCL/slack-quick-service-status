@@ -54,8 +54,9 @@ major, `major_outage` → critical). Groups and the "Visit ..." placeholder comp
 `menubar/service-status.5m.sh` is a [SwiftBar](https://swiftbar.app) plugin refreshed every 5 minutes
 (the interval is in the file name).
 
-- Title: 🟢 when everything is fine, 🟡 plus the affected services for minor problems, 🔴 for major or
-  critical ones, ⚪ when a page could not be fetched and nothing else is wrong.
+- Icon: one logo per service (`iconPath` in `SOURCES`, from [Simple Icons](https://simpleicons.org),
+  CC0) drawn as an SVG, each colored by its effective state: green, yellow (minor), orange (major),
+  red (critical), gray when its page could not be fetched.
 - One row per service with a dot per component (`GitHub  🟢🟢🟢🟡`). Clicking the row opens the status
   page; its submenu lists each component and every active incident, linked to the incident page.
 - A macOS notification is sent only when a service gets worse or recovers fully. The last state per
