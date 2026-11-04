@@ -5,9 +5,13 @@ export type ComponentStatus =
   | 'major_outage'
   | 'under_maintenance';
 
+export type Indicator = 'none' | 'minor' | 'major' | 'critical';
+
+export const SEVERITY_ORDER: Indicator[] = ['none', 'minor', 'major', 'critical'];
+
 export interface StatuspageSummary {
   page: { name: string; url: string; updated_at: string };
-  status: { indicator: 'none' | 'minor' | 'major' | 'critical'; description: string };
+  status: { indicator: Indicator; description: string };
   components: Array<{ name: string; status: ComponentStatus; group: boolean }>;
   incidents: Array<{
     name: string;
@@ -44,6 +48,38 @@ export const SOURCES: Record<string, StatusSource> = {
     summaryUrl: 'https://status.claude.com/api/v2/summary.json',
   },
 };
+
+const COMPONENT_INDICATOR: Record<ComponentStatus, Indicator> = {
+  operational: 'none',
+  under_maintenance: 'none',
+  degraded_performance: 'minor',
+  partial_outage: 'major',
+  major_outage: 'critical',
+};
+
+/**
+ * Returns the components a person cares about, dropping groups and the "Visit ..." placeholder.
+ */
+export function visibleComponents(summary: StatuspageSummary): StatuspageSummary['components'] {
+  return summary.components.filter((component) => !component.group && !component.name.startsWith('Visit '));
+}
+
+/**
+ * Returns the worst of the page indicator, every active incident impact and every visible
+ * component status, so a page that reports "none" during an incident is not shown as healthy.
+ */
+export function effectiveIndicator(summary: StatuspageSummary): Indicator {
+  const candidates: Indicator[] = [
+    summary.status.indicator,
+    ...summary.incidents
+      .map((incident) => incident.impact as Indicator)
+      .filter((impact) => SEVERITY_ORDER.includes(impact)),
+    ...visibleComponents(summary).map((component) => COMPONENT_INDICATOR[component.status]),
+  ];
+  return candidates.reduce((worst, candidate) =>
+    SEVERITY_ORDER.indexOf(candidate) > SEVERITY_ORDER.indexOf(worst) ? candidate : worst,
+  );
+}
 
 function findSource(word: string): StatusSource | undefined {
   return Object.values(SOURCES).find((source) => source.key === word || source.aliases.includes(word));

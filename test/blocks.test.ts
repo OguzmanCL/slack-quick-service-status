@@ -118,6 +118,13 @@ describe('buildMessageBlocks', () => {
     expect(JSON.stringify(blocks)).toContain('Incident with Actions');
   });
 
+  it('never calls a service healthy while it has an active incident', () => {
+    const calmWithIncident = { ...healthy, incidents: outage.incidents.map((item) => ({ ...item, impact: 'minor' })) };
+    const blocks = buildMessageBlocks([{ source: SOURCES.github, summary: calmWithIncident }], now) as Block[];
+    expect(blocks[1]?.elements?.[0]?.text).toContain('Hay servicios con problemas');
+    expect(blocks[2]?.text?.text).toContain(':large_yellow_circle: *Problemas menores*');
+  });
+
   it('skips the summary row when only one service was requested', () => {
     const blocks = buildMessageBlocks([{ source: SOURCES.claude, summary: healthy }], now) as Block[];
     expect(blocks.some((block) => block.type === 'section' && block.fields)).toBe(false);

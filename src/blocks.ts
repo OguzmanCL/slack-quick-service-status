@@ -1,6 +1,14 @@
-import { COMMAND, SOURCES, type ComponentStatus, type StatuspageSummary, type StatusSource } from './statuspage.ts';
-
-type Indicator = StatuspageSummary['status']['indicator'];
+import {
+  COMMAND,
+  effectiveIndicator,
+  SEVERITY_ORDER,
+  SOURCES,
+  visibleComponents,
+  type ComponentStatus,
+  type Indicator,
+  type StatuspageSummary,
+  type StatusSource,
+} from './statuspage.ts';
 
 export type ServiceResult =
   | { source: StatusSource; summary: StatuspageSummary }
@@ -8,7 +16,6 @@ export type ServiceResult =
 
 const MAX_FIELDS = 10;
 const INCIDENT_EXCERPT_LENGTH = 280;
-const SEVERITY_ORDER: Indicator[] = ['none', 'minor', 'major', 'critical'];
 
 const OVERALL: Record<Indicator, { emoji: string; label: string }> = {
   none: { emoji: ':large_green_circle:', label: 'Todo operativo' },
@@ -88,10 +95,8 @@ function incidentBlocks(incident: StatuspageSummary['incidents'][number]): unkno
  * worst first, a compact line of healthy components, incidents and link buttons.
  */
 export function buildServiceBlocks(source: StatusSource, summary: StatuspageSummary): unknown[] {
-  const overall = OVERALL[summary.status.indicator];
-  const components = summary.components.filter(
-    (component) => !component.group && !component.name.startsWith('Visit '),
-  );
+  const overall = OVERALL[effectiveIndicator(summary)];
+  const components = visibleComponents(summary);
   const healthy = components.filter((component) => component.status === 'operational');
   const affected = components
     .filter((component) => component.status !== 'operational')
@@ -138,7 +143,7 @@ function footerHint(): string {
 function headline(results: ServiceResult[]): string {
   const worst = results.reduce<Indicator>((current, result) => {
     if (!('summary' in result)) return current;
-    const indicator = result.summary.status.indicator;
+    const indicator = effectiveIndicator(result.summary);
     return SEVERITY_ORDER.indexOf(indicator) > SEVERITY_ORDER.indexOf(current) ? indicator : current;
   }, 'none');
   if (worst !== 'none') return `${OVERALL[worst].emoji} Hay servicios con problemas`;
@@ -156,13 +161,11 @@ export function buildMessageBlocks(results: ServiceResult[], now: Date): unknown
       ? [
           {
             type: 'section',
-            fields: results.map((result) => ({
-              type: 'mrkdwn',
-              text:
-                'summary' in result
-                  ? `*${result.source.label}*\n${OVERALL[result.summary.status.indicator].emoji} ${OVERALL[result.summary.status.indicator].label}`
-                  : `*${result.source.label}*\n:warning: Sin datos`,
-            })),
+            fields: results.map((result) => {
+              if (!('summary' in result)) return { type: 'mrkdwn', text: `*${result.source.label}*\n:warning: Sin datos` };
+              const overall = OVERALL[effectiveIndicator(result.summary)];
+              return { type: 'mrkdwn', text: `*${result.source.label}*\n${overall.emoji} ${overall.label}` };
+            }),
           },
           { type: 'divider' },
         ]
