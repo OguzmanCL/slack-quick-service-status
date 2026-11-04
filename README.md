@@ -4,6 +4,9 @@ Slack slash command (`/ss`) that answers with the current health of GitHub and C
 read straight from their public Statuspage APIs. Runs as a Cloudflare Worker, so there is no
 server to keep alive.
 
+The same status logic also feeds a macOS menu bar indicator (SwiftBar) and the `/ss-send` Claude
+skill, which posts the status message to Slack without the app.
+
 ## Usage in Slack
 
 | Command | Result |
@@ -36,17 +39,63 @@ Both pages run on Atlassian Statuspage and expose the same `api/v2/summary.json`
 - Claude: `https://status.claude.com/api/v2/summary.json`
 
 Adding another Statuspage-backed service is one entry in `SOURCES` inside `src/statuspage.ts`, with its
-key, short aliases, label, logo URL and summary URL. The help message picks it up automatically.
+key, short aliases, label, logo URL and summary URL. The help message, the menu bar and the skill pick
+it up automatically.
+
+## Effective state
+
+Status pages sometimes keep `status.indicator` at `none` while an incident is open or a component is
+down. Every consumer uses `effectiveIndicator` instead: the worst of the page indicator, each active
+incident's impact and each visible component (`degraded_performance` → minor, `partial_outage` →
+major, `major_outage` → critical). Groups and the "Visit ..." placeholder component are ignored.
+
+## Menu bar (SwiftBar)
+
+`menubar/service-status.5m.sh` is a [SwiftBar](https://swiftbar.app) plugin refreshed every 5 minutes
+(the interval is in the file name).
+
+- Title: 🟢 when everything is fine, 🟡 plus the affected services for minor problems, 🔴 for major or
+  critical ones, ⚪ when a page could not be fetched and nothing else is wrong.
+- One row per service with a dot per component (`GitHub  🟢🟢🟢🟡`). Clicking the row opens the status
+  page; its submenu lists each component and every active incident, linked to the incident page.
+- A macOS notification is sent only when a service gets worse or recovers fully. The last state per
+  service lives in `$SWIFTBAR_PLUGIN_DATA_PATH/state.json` (`~/.cache/service-status/state.json` when
+  run outside SwiftBar).
+
+Install it from the main clone, so it keeps working after any worktree is removed:
+
+```bash
+brew install --cask swiftbar
+ln -s ~/Propelus-proyects/slack-quick-service-status/menubar/service-status.5m.sh \
+  "$(defaults read com.ameba.SwiftBar PluginDirectory)/service-status.5m.sh"
+open -a SwiftBar
+```
+
+The wrapper runs `~/.local/share/fnm/aliases/default/bin/node` because SwiftBar does not load the
+shell profile. Set `SERVICE_STATUS_NODE` to use another Node 24+ binary. Run the wrapper in a terminal
+to see the raw SwiftBar output.
+
+## Claude skill `/ss-send`
+
+`~/.claude/skills/ss-send/SKILL.md` posts the status to Slack through the Slack connector, which only
+accepts markdown. `pnpm markdown [g|c|all]` (`scripts/slack-markdown.ts`) renders the same Block Kit
+message with `src/markdown.ts`: buttons become links and Slack date tokens are resolved to the local
+time. The skill sends to the user's DM directly and shows a draft before posting to a channel or to
+someone else.
 
 ## Project layout
 
 - `src/statuspage.ts` defines the sources, resolves the command text, fetches summaries and builds the
   help message.
 - `src/blocks.ts` renders the Block Kit message and the per-service cards.
+- `src/markdown.ts` converts those blocks into Slack markdown for the `/ss-send` skill.
 - `src/slack.ts` verifies the Slack request signature and rejects stale timestamps.
 - `src/index.ts` is the Worker entry point. It also acknowledges interaction payloads from the link
   buttons with an empty 200.
 - `scripts/preview.ts` prints a Block Kit Builder URL that renders the message with live data.
+- `scripts/slack-markdown.ts` prints the message as Slack markdown (`pnpm markdown`).
+- `menubar/render.ts` builds the SwiftBar output and detects state transitions; `menubar/plugin.ts`
+  fetches, prints, stores state and notifies; `menubar/service-status.5m.sh` is the SwiftBar entry.
 - `test/` vitest suites for every module.
 
 ## Development
