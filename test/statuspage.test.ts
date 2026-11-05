@@ -11,8 +11,8 @@ function summaryWith(overrides: Partial<StatuspageSummary>): StatuspageSummary {
   };
 }
 
-function incident(impact: string): StatuspageSummary['incidents'][number] {
-  return { name: 'Incident', status: 'investigating', impact, shortlink: 'https://stspg.io/x', incident_updates: [] };
+function incident(impact: string, status = 'investigating'): StatuspageSummary['incidents'][number] {
+  return { name: 'Incident', status, impact, shortlink: 'https://stspg.io/x', incident_updates: [] };
 }
 
 describe('resolveSources', () => {
@@ -65,7 +65,8 @@ describe('effectiveIndicator', () => {
     expect(effectiveIndicator({ ...summary, components: [summary.components[1]!] })).toBe('minor');
   });
 
-  it('ignores incident impacts it does not know', () => {
+  it('ignores incidents already mitigated or with an impact it does not know', () => {
+    expect(effectiveIndicator(summaryWith({ incidents: [incident('minor', 'monitoring')] }))).toBe('none');
     expect(effectiveIndicator(summaryWith({ incidents: [incident('maintenance')] }))).toBe('none');
   });
 });

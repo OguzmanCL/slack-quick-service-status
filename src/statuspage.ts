@@ -69,14 +69,18 @@ export function visibleComponents(summary: StatuspageSummary): StatuspageSummary
   return summary.components.filter((component) => !component.group && !component.name.startsWith('Visit '));
 }
 
+const MITIGATED_INCIDENT_STATUSES = ['monitoring', 'resolved', 'postmortem'];
+
 /**
- * Returns the worst of the page indicator, every active incident impact and every visible
- * component status, so a page that reports "none" during an incident is not shown as healthy.
+ * Returns the worst of the page indicator, the impact of every incident still being worked on and
+ * every visible component status, so a page that reports "none" during an incident is not shown as
+ * healthy, while an incident already mitigated and only being monitored no longer counts.
  */
 export function effectiveIndicator(summary: StatuspageSummary): Indicator {
   const candidates: Indicator[] = [
     summary.status.indicator,
     ...summary.incidents
+      .filter((incident) => !MITIGATED_INCIDENT_STATUSES.includes(incident.status))
       .map((incident) => incident.impact as Indicator)
       .filter((impact) => SEVERITY_ORDER.includes(impact)),
     ...visibleComponents(summary).map((component) => COMPONENT_INDICATOR[component.status]),

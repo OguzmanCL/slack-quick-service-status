@@ -46,7 +46,8 @@ it up automatically.
 
 Status pages sometimes keep `status.indicator` at `none` while an incident is open or a component is
 down. Every consumer uses `effectiveIndicator` instead: the worst of the page indicator, each active
-incident's impact and each visible component (`degraded_performance` → minor, `partial_outage` →
+incident's impact while it is still being worked on (incidents in `monitoring`, already mitigated,
+no longer count) and each visible component (`degraded_performance` → minor, `partial_outage` →
 major, `major_outage` → critical). Groups and the "Visit ..." placeholder component are ignored.
 
 ## Menu bar (SwiftBar)
